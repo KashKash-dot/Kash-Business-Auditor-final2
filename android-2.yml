@@ -1,0 +1,103 @@
+name: Build Kash Business Auditor APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Locate source ZIP
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="$(find . -maxdepth 1 -type f -name '*.zip' -print -quit)"
+          if [ -z "$ZIP" ]; then
+            echo "No source ZIP found in repository root."
+            exit 1
+          fi
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+          echo "Using source ZIP: $ZIP"
+
+      - name: Extract source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/kash-source"
+          mkdir -p "$RUNNER_TEMP/kash-source"
+          unzip -q "${{ steps.source.outputs.zip }}" -d "$RUNNER_TEMP/kash-source"
+
+      - name: Locate app root
+        id: app
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_DIR="$(find "$RUNNER_TEMP/kash-source" -type f -name package.json -not -path '*/node_modules/*' -print -quit | xargs -r dirname)"
+          if [ -z "$APP_DIR" ]; then
+            echo "package.json not found in extracted source."
+            exit 1
+          fi
+          echo "dir=$APP_DIR" >> "$GITHUB_OUTPUT"
+          echo "App root: $APP_DIR"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ${{ steps.app.outputs.dir }}
+        run: npm install
+
+      - name: Build web app
+        working-directory: ${{ steps.app.outputs.dir }}
+        run: npm run build
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Prepare Android project
+        working-directory: ${{ steps.app.outputs.dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d android-template ] && { [ -f android-template/gradlew ] || [ -f android-template/settings.gradle ] || [ -f android-template/settings.gradle.kts ]; }; then
+            rm -rf android
+            cp -R android-template android
+          fi
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: Build debug APK
+        working-directory: ${{ steps.app.outputs.dir }}/android
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kash-Business-Auditor-debug-APK
+          path: ${{ steps.app.outputs.dir }}/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
