@@ -1,0 +1,126 @@
+name: Build Kash Business Auditor APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Extract definitive source package
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP="Kash-Business-Auditor-Definitive-Final-Feature-Complete-1.zip"
+          if [ ! -f "$ZIP" ]; then
+            echo "Source ZIP not found: $ZIP"
+            exit 1
+          fi
+          rm -rf source
+          mkdir -p source
+          unzip -q "$ZIP" -d source
+          PROJECT_DIR="$(find source -mindepth 1 -maxdepth 2 -type f -name package.json -print -quit | xargs -r dirname)"
+          if [ -z "$PROJECT_DIR" ] || [ ! -f "$PROJECT_DIR/package.json" ]; then
+            echo "Could not locate package.json in the extracted source."
+            exit 1
+          fi
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Project located at: $PROJECT_DIR"
+
+      - name: Install web dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build web application
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npm run build
+
+      - name: Create native Android project with Capacitor
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: npx cap add android
+
+      - name: Apply Kash Android permissions and branding
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          GENERATED_MANIFEST="android/app/src/main/AndroidManifest.xml"
+          TEMPLATE_MANIFEST="android-template/app/src/main/AndroidManifest.xml"
+          ICON_SOURCE="public/resources/installation-icon.png"
+          ICON_TARGET="android/app/src/main/res/drawable/kash_business_auditor_icon.png"
+
+          test -f "$GENERATED_MANIFEST"
+          test -f "$TEMPLATE_MANIFEST"
+          test -f "$ICON_SOURCE"
+
+          python3 - "$GENERATED_MANIFEST" "$TEMPLATE_MANIFEST" <<'PY'
+          import sys
+          from pathlib import Path
+          generated = Path(sys.argv[1])
+          template = Path(sys.argv[2])
+          text = generated.read_text()
+          permissions = []
+          for line in template.read_text().splitlines():
+              s = line.strip()
+              if s.startswith('<uses-permission '):
+                  permissions.append(s)
+          missing = [p for p in permissions if p not in text]
+          if missing:
+              marker = '    <application'
+              block = ''.join('    ' + p + '
+' for p in missing)
+              if marker in text:
+                  text = text.replace(marker, block + marker, 1)
+              else:
+                  raise SystemExit('Could not find <application> in generated AndroidManifest.xml')
+          generated.write_text(text)
+          PY
+
+          cp "$ICON_SOURCE" "$ICON_TARGET"
+          sed -i 's|@mipmap/ic_launcher|@drawable/kash_business_auditor_icon|g' "$GENERATED_MANIFEST"
+          sed -i 's|@mipmap/ic_launcher_round|@drawable/kash_business_auditor_icon|g' "$GENERATED_MANIFEST"
+
+      - name: Sync Capacitor Android project
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: ${{ env.PROJECT_DIR }}/android
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x ./gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kash-Business-Auditor-debug-APK
+          path: ${{ env.PROJECT_DIR }}/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
