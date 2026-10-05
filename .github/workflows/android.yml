@@ -93,8 +93,7 @@ jobs:
           missing = [p for p in permissions if p not in text]
           if missing:
               marker = '    <application'
-              block = ''.join('    ' + p + '
-' for p in missing)
+          block = ''.join('    ' + p + '\n' for p in missing)
               if marker in text:
                   text = text.replace(marker, block + marker, 1)
               else:
