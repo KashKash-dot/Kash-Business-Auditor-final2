@@ -59,6 +59,8 @@ jobs:
       - name: Install dependencies
         working-directory: ${{ steps.app.outputs.dir }}
         run: npm install
+      - name: Install TypeScript for Capacitor working-directory: ${{ steps.app.outputs.dir }}
+        run: npm install --save-dev typescript
 
       - name: Build web app
         working-directory: ${{ steps.app.outputs.dir }}
