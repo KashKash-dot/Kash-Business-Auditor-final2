@@ -1,0 +1,55 @@
+name: Build Windows Version
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Kash-Business-Auditor-Windows-Version.zip'
+      - '.github/workflows/windows.yml'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Locate Windows ZIP
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem -Path . -Filter '*.zip' |
+            Where-Object { $_.Name -like '*Windows*' } |
+            Select-Object -First 1
+          if (-not $zip) { throw 'Windows ZIP not found in repository root.' }
+          Write-Host "Using $($zip.FullName)"
+          Expand-Archive -Path $zip.FullName -DestinationPath extracted -Force
+
+      - name: Locate Windows client
+        shell: pwsh
+        run: |
+          $pkg = Get-ChildItem -Path extracted -Filter package.json -Recurse |
+            Where-Object { $_.FullName -like '*windows-client*' } |
+            Select-Object -First 1
+          if (-not $pkg) { throw 'windows-client/package.json not found.' }
+          "WINDOWS_CLIENT_DIR=$($pkg.Directory.FullName)" |
+            Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Windows client dependencies
+        working-directory: ${{ env.WINDOWS_CLIENT_DIR }}
+        run: npm install
+
+      - name: Build Windows installer and portable EXE
+        working-directory: ${{ env.WINDOWS_CLIENT_DIR }}
+        run: npm run build
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kash-Business-Auditor-Windows
+          path: ${{ env.WINDOWS_CLIENT_DIR }}/release/*.exe
+          if-no-files-found: error
