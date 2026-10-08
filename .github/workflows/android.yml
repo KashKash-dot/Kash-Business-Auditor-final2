@@ -76,35 +76,49 @@ jobs:
           GENERATED_MANIFEST="android/app/src/main/AndroidManifest.xml"
           TEMPLATE_MANIFEST="android-template/app/src/main/AndroidManifest.xml"
           ICON_SOURCE="android-template/app/src/main/res/drawable/kash_business_auditor_icon.png"
-          ICON_SOURCE="android-template/app/src/main/res/drawable/kash_business_auditor_icon.png"
+          ICON_TARGET="android/app/src/main/res/drawable/kash_business_auditor_icon.png"
+          
 
           test -f "$GENERATED_MANIFEST"
           test -f "$TEMPLATE_MANIFEST"
           test -f "$ICON_SOURCE"
 
-          python3 - "$GENERATED_MANIFEST" "$TEMPLATE_MANIFEST" <<'PY'
+                    python3 - "$GENERATED_MANIFEST" "$TEMPLATE_MANIFEST" <<'PY'
           import sys
           from pathlib import Path
+
           generated = Path(sys.argv[1])
           template = Path(sys.argv[2])
+
           text = generated.read_text()
+
           permissions = []
           for line in template.read_text().splitlines():
               s = line.strip()
               if s.startswith('<uses-permission '):
                   permissions.append(s)
+
           missing = [p for p in permissions if p not in text]
+
           if missing:
               marker = '    <application'
-          block = ''.join('    ' + p + '\n' for p in missing)
+              block = ''.join('    ' + p + '\n' for p in missing)
+
               if marker in text:
                   text = text.replace(marker, block + marker, 1)
               else:
-                  raise SystemExit('Could not find <application> in generated AndroidManifest.xml')
+                  raise SystemExit(
+                      'Could not find <application> in generated AndroidManifest.xml'
+                  )
+
           generated.write_text(text)
           PY
+          ICON_SOURCE="android-template/app/src/main/res/drawable/kash_business_auditor_icon.png"
+          ICON_TARGET="android/app/src/main/res/drawable/kash_business_auditor_icon.png"
 
-          cp "$ICON_SOURCE" "$ICON_TARGET"
+          mkdir -p "$(dirname "$ICON_TARGET")"
+          cp "$ICON_SOURCE" "$ICON_TARGET
+         
           sed -i 's|@mipmap/ic_launcher|@drawable/kash_business_auditor_icon|g' "$GENERATED_MANIFEST"
           sed -i 's|@mipmap/ic_launcher_round|@drawable/kash_business_auditor_icon|g' "$GENERATED_MANIFEST"
 
