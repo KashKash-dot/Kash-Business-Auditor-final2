@@ -19,11 +19,11 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Extract definitive source package
         shell: bash
@@ -77,6 +77,7 @@ jobs:
           TEMPLATE_MANIFEST="android-template/app/src/main/AndroidManifest.xml"
           ICON_SOURCE="android-template/app/src/main/res/drawable/kash_business_auditor_icon.png"
           ICON_TARGET="android/app/src/main/res/drawable/kash_business_auditor_icon.png"
+          ICON_ROUND_TARGET="android/app/src/main/res/drawable/kash_business_auditor_icon_round.png"
           
 
           test -f "$GENERATED_MANIFEST"
@@ -117,7 +118,8 @@ jobs:
           ICON_TARGET="android/app/src/main/res/drawable/kash_business_auditor_icon.png"
 
           mkdir -p "$(dirname "$ICON_TARGET")"
-          cp "$ICON_SOURCE" "$ICON_TARGET" 
+          cp "$ICON_SOURCE" "$ICON_TARGET"
+          cp "$ICON_SOURCE" "$ICON_ROUND_TARGET"
          
           sed -i 's|@mipmap/ic_launcher|@drawable/kash_business_auditor_icon|g' "$GENERATED_MANIFEST"
           sed -i 's|@mipmap/ic_launcher_round|@drawable/kash_business_auditor_icon|g' "$GENERATED_MANIFEST"
