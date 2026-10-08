@@ -57,8 +57,8 @@ jobs:
           fi
       - name: Install TypeScript for Capacitor
         working-directory: ${{ env.PROJECT_DIR }}
-        run: npm install --save-dev typescript
-
+        
+        run: npm install --save-dev typescript@5.9.3
       - name: Build web application
         working-directory: ${{ env.PROJECT_DIR }}
         run: npm run build
@@ -117,7 +117,7 @@ jobs:
           ICON_TARGET="android/app/src/main/res/drawable/kash_business_auditor_icon.png"
 
           mkdir -p "$(dirname "$ICON_TARGET")"
-          cp "$ICON_SOURCE" "$ICON_TARGET
+          cp "$ICON_SOURCE" "$ICON_TARGET" 
          
           sed -i 's|@mipmap/ic_launcher|@drawable/kash_business_auditor_icon|g' "$GENERATED_MANIFEST"
           sed -i 's|@mipmap/ic_launcher_round|@drawable/kash_business_auditor_icon|g' "$GENERATED_MANIFEST"
