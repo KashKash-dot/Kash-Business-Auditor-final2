@@ -28,7 +28,7 @@ jobs:
         shell: pwsh
         run: |
           $pkg = Get-ChildItem -Path extracted -Filter package.json -Recurse |
-            Where-Object { $_.FullName -like '*windows-client*' } |
+          
             Select-Object -First 1
           if (-not $pkg) { throw 'windows-client/package.json not found.' }
           "WINDOWS_CLIENT_DIR=$($pkg.Directory.FullName)" |
