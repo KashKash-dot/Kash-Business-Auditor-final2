@@ -1,55 +1,71 @@
-name: Build Windows Version
+
+
+name: Build Kash Business Auditor Windows
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - 'Kash-Business-Auditor-Windows-Version.zip'
-      - .github/workflows/windows.yml
+      - 'Kash-Business-Auditor-STANDALONE-LOGIN-CORRECTED-SOURCE.zip'
+      - '.github/workflows/windows.yml'
+
+permissions:
+  contents: read
 
 jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Locate Windows ZIP
+      - name: Locate corrected source ZIP
+        id: source
         shell: pwsh
         run: |
-          $zip = Get-ChildItem -Path . -Filter '*.zip' |
-            Where-Object { $_.Name -like '*Windows*' } |
-            Select-Object -First 1
-          if (-not $zip) { throw 'Windows ZIP not found in repository root.' }
-          Write-Host "Using $($zip.FullName)"
-          Expand-Archive -Path $zip.FullName -DestinationPath extracted -Force
+          $zip = Join-Path $env:GITHUB_WORKSPACE 'Kash-Business-Auditor-STANDALONE-LOGIN-CORRECTED-SOURCE.zip'
+          if (-not (Test-Path $zip)) {
+            throw 'Corrected source ZIP not found.'
+          }
+          "zip=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Locate Windows client
+      - name: Extract source ZIP
+        id: extract
         shell: pwsh
         run: |
-          $pkg = Get-ChildItem -Path extracted -Filter package.json -Recurse |
-          
-            Select-Object -First 1
-          if (-not $pkg) { throw 'windows-client/package.json not found.' }
-          "WINDOWS_CLIENT_DIR=$($pkg.Directory.FullName)" |
-            Out-File -FilePath $env:GITHUB_ENV -Append
+          $dest = Join-Path $env:RUNNER_TEMP 'kash-source'
+          New-Item -ItemType Directory -Path $dest -Force | Out-Null
+          Expand-Archive -Path "${{ steps.source.outputs.zip }}" -DestinationPath $dest -Force
+          "dir=$dest" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Setup Node
+      - name: Locate project root
+        id: app
+        shell: pwsh
+        run: |
+          $pkg = Get-ChildItem -Path "${{ steps.extract.outputs.dir }}" -Filter package.json -File -Recurse |
+            Where-Object { $_.FullName -notmatch '\\node_modules\\' } |
+            Select-Object -First 1
+          if (-not $pkg) {
+            throw 'package.json not found in source ZIP.'
+          }
+          "dir=$($pkg.Directory.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Install Windows client dependencies
-        working-directory: ${{ env.WINDOWS_CLIENT_DIR }}
-        run: npm install
+      - name: Install dependencies
+        working-directory: ${{ steps.app.outputs.dir }}
+        run: npm install --no-audit --no-fund
 
       - name: Build Windows installer and portable EXE
-        working-directory: ${{ env.WINDOWS_CLIENT_DIR }}
-        run: npm run build
+        working-directory: ${{ steps.app.outputs.dir }}
+        run: npm run windows:build
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Kash-Business-Auditor-Windows
-          path: ${{ env.WINDOWS_CLIENT_DIR }}/release/*.exe
+          name: Kash-Business-Auditor-Corrected-Windows
+          path: ${{ steps.app.outputs.dir }}/release/*.exe
           if-no-files-found: error
