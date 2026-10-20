@@ -1,0 +1,81 @@
+
+name: Build KASH Master Control Centre Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'KASH-Auditor-MCC-REVISED-SOURCE-2026-10-20.zip'
+      - '.github/workflows/kmcc-windows.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-kmcc-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Locate revised source ZIP
+        id: source
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:GITHUB_WORKSPACE 'KASH-Auditor-MCC-REVISED-SOURCE-2026-10-20.zip'
+          if (-not (Test-Path $zip)) {
+            throw "Revised source ZIP not found: $zip"
+          }
+          "zip=$zip" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Extract source ZIP
+        id: extract
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP 'kash-source'
+          if (Test-Path $source) {
+            Remove-Item $source -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $source | Out-Null
+          Expand-Archive -Path "${{ steps.source.outputs.zip }}" -DestinationPath $source -Force
+          "dir=$source" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Verify KMCC project and icon
+        shell: pwsh
+        run: |
+          $app = Join-Path "${{ steps.extract.outputs.dir }}" 'KASH-Integrated-Source\KASH-MCC-Windows-Version\windows-client'
+          if (-not (Test-Path (Join-Path $app 'package.json'))) {
+            throw "KMCC package.json not found: $app"
+          }
+          if (-not (Test-Path (Join-Path $app 'build\kash-mcc-installation-icon.ico'))) {
+            throw "KMCC Windows icon is missing."
+          }
+          Write-Host "Verified KMCC project: $app"
+          Write-Host "Verified KMCC Windows icon."
+          "KMCC_APP_DIR=$app" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install KMCC dependencies
+        working-directory: ${{ env.KMCC_APP_DIR }}
+        run: npm install --no-audit --no-fund
+
+      - name: Run KMCC source checks
+        working-directory: ${{ env.KMCC_APP_DIR }}
+        run: npm test
+
+      - name: Build KMCC installer and portable EXE
+        working-directory: ${{ env.KMCC_APP_DIR }}
+        run: npm run dist
+
+      - name: Upload KMCC Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: KASH-MCC-Windows-Installer-and-Portable
+          path: ${{ env.KMCC_APP_DIR }}/release/*.exe
+          if-no-files-found: error
