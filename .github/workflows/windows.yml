@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'Kash-Business-Auditor-STANDALONE-LOGIN-CORRECTED-SOURCE.zip'
+      - 'KASH-Auditor-MCC-REVISED-SOURCE-2026-10-20.zip'
       - '.github/workflows/windows.yml'
 
 permissions:
@@ -23,7 +23,7 @@ jobs:
         id: source
         shell: pwsh
         run: |
-          $zip = Join-Path $env:GITHUB_WORKSPACE 'Kash-Business-Auditor-STANDALONE-LOGIN-CORRECTED-SOURCE.zip'
+          $zip = Join-Path $env:GITHUB_WORKSPACE 'KASH-Auditor-MCC-REVISED-SOURCE-2026-10-20.zip'
           if (-not (Test-Path $zip)) {
             throw 'Corrected source ZIP not found.'
           }
